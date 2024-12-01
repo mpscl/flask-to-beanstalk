@@ -10,7 +10,3 @@ provider "aws" {
 locals {
   workspace = terraform.workspace
 }
-
-resource "aws_s3_bucket" "example" {
-  bucket = "example-${local.workspace}"
-}
