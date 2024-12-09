@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+
+# Early exit in case of an error
+set -e
+
+# Debug info
+set -vx
+
+echo "Starting Gunicorn"
+
+cd /usr/src
+
+cmd=(
+    gunicorn
+    --bind=unix:/tmp/gunicorn.socket
+    --pid=/run/gunicorn.pid
+    --workers="${GUNICORN_WORKERS:-$(( $(nproc) * 2 + 1 ))}"
+    --capture-output
+)
+
+
+if [ "${FLASK_ENV}" = "development" ]; then
+    cmd+=(--reload)
+fi
+
+cmd+=(app.wsgi:application)
+
+exec "${cmd[@]}"

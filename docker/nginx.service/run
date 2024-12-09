@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+exec 2>&1
+echo "Starting Nginx"
+
+exec /usr/sbin/nginx -c /nginx/nginx.conf

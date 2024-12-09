@@ -1,0 +1,85 @@
+name: Deploy All Environments
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+
+jobs:
+  deploy-beanstalk:
+    name: Deploy All Environments
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_PACKAGE_NAME: "flask-app-${{ github.sha }}.zip"
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: 1.9.8
+
+    - name: Find Environment Files
+      id: find_envs
+      run: |
+        echo "Finding all .tfvars files in terraform/envs directory..."
+        ENV_FILES=$(find terraform/envs -type f -name '*.tfvars' -exec basename {} \;)
+        echo "Found environment files:"
+        echo "$ENV_FILES"
+        echo "ENV_FILES=$ENV_FILES" >> $GITHUB_ENV
+
+    - name: Deploy All Environments
+      working-directory: terraform
+      env:
+        ENV_FILES: ${{ env.ENV_FILES }}
+      run: |
+        terraform init
+
+        echo "Processing environment files..."
+        for ENV_FILE in $ENV_FILES; do
+          echo "Environment file: $ENV_FILE"
+
+          # Extract environment name
+          ENV_NAME=$(basename "$ENV_FILE" .tfvars)
+          echo "Deploying environment: $ENV_NAME"
+
+          # Select or create workspace
+          terraform workspace select "$ENV_NAME" || terraform workspace new "$ENV_NAME"
+
+          # Validate, plan, and apply
+          terraform validate
+          # terraform plan -var-file="envs/$ENV_FILE"
+          # terraform apply -auto-approve -var-file="envs/$ENV_FILE"
+
+
+          terraform destroy -auto-approve -var-file="envs/$ENV_FILE"
+  
+        done
+
+    # - name: Zip deployment package
+    #   run: |
+    #     zip -r ${{ env.DEPLOY_PACKAGE_NAME }} . -x terraform\* *.git*
+    #     ls
+
+    # - name: Deploy
+    #   uses: einaregilsson/beanstalk-deploy@v22
+    #   with:
+    #     aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
+    #     aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    #     application_name: "flask-app"
+    #     environment_name: "flask-app-development"
+    #     deployment_package: ${{ env.DEPLOY_PACKAGE_NAME }}
+    #     region: ${{ secrets.AWS_DEFAULT_REGION }}
+    #     version_label: ${{ github.sha }}
+    #     use_existing_version_if_available: True
+    #     wait_for_deployment: True
